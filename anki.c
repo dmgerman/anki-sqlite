@@ -1,10 +1,10 @@
 /*
- * Written by Alexey Tourbin <at@altlinux.org>.
+ * Written by Daniel M. German <dmg@turingmachine.org>
  *
- * The author has dedicated the code to the public domain.  Anyone is free
- * to copy, modify, publish, use, compile, sell, or distribute the original
- * code, either in source code form or as a compiled binary, for any purpose,
- * commercial or non-commercial, and by any means.
+ * based on the PRCE library for sqlite by Alexey Tourbin <at@altlinux.org>.
+ *
+ *  This software is licensed under the GPLv3+ license
+ *
  */
 #include <assert.h>
 #include <stdio.h>

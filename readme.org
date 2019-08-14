@@ -1,0 +1,25 @@
+This is a simple library of two UDFs for sqlite to query and update anki databases.
+
+They provide a way to decode a given field in a note, and to encode it too.
+
+the functions anki_getfld(f, i) would take a "flds" column of the table notes and decode its i-th field.
+
+For example, the following query will list the 2nd field of all the notes in the database:
+
+#+begin_src sql
+select anki_getfld(flds, 2) from notes ;
+#+end_src
+
+
+Its complementary function is anki_setfld(f, index, newValue). Replaces the given field with another value. For example:
+
+#+begin_src sql
+create temp table rip as
+     select noteid, anki_setfld(flds, 10, "abc") as newfld from notes;
+#+end_src
+
+It does not allow to set the first field, since that would require a change in the checksum of the flds attribute, and
+there is no simple way to guarantee that consistency.
+
+With these two functions you can more easily extract and manipulate (including updating) the data in a given deck.  I
+warn you, you need to know the way the decks are stored in the database.
