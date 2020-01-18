@@ -44,7 +44,7 @@ warn you, you need to know the way the decks are stored in the database.
 
 * Example of how to use
 
-In this example, I have the following use case. I want to make a tape with the notes that are due in the short future.
+In this example, I have the following use case. I want to make a tape with audio files referenced in the cards that are due in the short future.
 E.g., I want to create an audio with the audio of the next 100 cards to review. But to this I first need to extract
 *the contents of the specific fields (e.g. "Audio" in the next cards that are due. This can be done within Anki using
 python, but I want to do it directly from SQL.
@@ -207,7 +207,7 @@ select * from nextcards limit 10;
 
 * Put everything together
 
-Now we can ask, for the cards that are to be reviewed, output only the "Audio"  field. Note that these cards are due in the past :)
+Now we can ask, for the cards that are to be reviewed, output only the "Audio"  field. Note these example cards were due in the past :)
 it is now trivial to write a script that will take this output and create an immersion file. And this is *result* we were looking for:
 
 #+begin_src sqlite
