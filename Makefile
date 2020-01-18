@@ -1,3 +1,4 @@
+DEFAULT=json1.so anki.so
 CC=cc
 INSTALL=install
 CFLAGS?=
@@ -15,6 +16,8 @@ anki.so : anki.c
 pcre.so : pcre.c
 	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror pcre.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
 
+json1.so : json1.c
+	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror pcre.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
 
 install : pcre.so
 	${INSTALL} -pD -m755 pcre.so ${DESTDIR}${prefix}/lib/sqlite3/pcre.so

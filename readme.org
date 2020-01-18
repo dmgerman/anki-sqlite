@@ -1,3 +1,20 @@
+#+STARTUP: showall
+#+STARTUP: lognotestate
+#+TAGS: research(r) uvic(u) today(y) todo(t) cooking(c)
+#+SEQ_TODO: TODO(t) STARTED(s) DEFERRED(r) CANCELLED(c) | WAITING(w) DELEGATED(d) APPT(a) DONE(d)
+#+DRAWERS: HIDDEN STATE
+#+ARCHIVE: %s_done::
+#+TITLE: SQLLite support for  accessing Anki fields
+#+CATEGORY:
+#+PROPERTY: header-args:sql             :engine postgresql  :exports both :cmdline csc370
+#+PROPERTY: header-args:sqlite          :db /tmp/collection.anki2  :colnames yes
+#+PROPERTY: header-args:C++             :results output :flags -std=c++14 -Wall --pedantic -Werror
+#+PROPERTY: header-args:R               :results output  :colnames yes
+#+OPTIONS: ^:nil
+
+
+
+
 This is a simple library of two UDFs for sqlite to query and update anki databases.
 
 They provide a way to decode a given field in a note, and to encode it too.
@@ -23,3 +40,199 @@ there is no simple way to guarantee that consistency.
 
 With these two functions you can more easily extract and manipulate (including updating) the data in a given deck.  I
 warn you, you need to know the way the decks are stored in the database.
+
+
+* Example of how to use
+
+In this example, I have the following use case. I want to make a tape with the notes that are due in the short future.
+E.g., I want to create an audio with the audio of the next 100 cards to review. But to this I first need to extract
+*the contents of the specific fields (e.g. "Audio" in the next cards that are due. This can be done within Anki using
+python, but I want to do it directly from SQL.
+
+So the goal is to create a query that lists the contents of the Audio field of the cards next to be review (100 in this example)
+
+
+Anki does not make it easy to extract this information. Fortunately there is now support for
+JSON in sqlite. This plus the functions above are good enough for our needs. You need to install the json1 module. See
+https://www.sqlite.org/json1.html
+
+** First we need to know the model names.
+
+Anki stores a "model" for each type of note. This model can be retrieved with the following query:
+
+Let us make it a view, so we can more easily use it:
+
+#+begin_src sqlite
+drop view if exists modelnames;
+create view modelnames as
+  select value as modelname,
+    substr(substr(r.fullkey, 3), 0, length(r.fullkey)-5)  as mid,
+    r.fullkey from col, json_tree(col.models) as r
+where r.key = 'name' and r.fullkey regexp '^\$\.[0-9]+\.name$'
+;
+#+end_src
+
+#+RESULTS:
+
+This view contains 3 fields: the modelname, the modelid (field mid in notes),
+and the original json data (for debugging) These are the first 5 models in my
+collection:
+
+#+begin_src sqlite
+select * from modelnames
+limit 5;
+#+end_src
+
+#+RESULTS:
+| modelname                                          |           mid | fullkey              |
+|----------------------------------------------------+---------------+----------------------|
+| 2. Mnemonics (For Radicals) [2-28-15 Radical Deck] | 1408314099568 | $.1408314099568.name |
+| core10k                                            | 1489429491730 | $.1489429491730.name |
+| fluentForever                                      | 1481407448472 | $.1481407448472.name |
+| NihongoShark.com: JLPT Cramming Deck               | 1433470889348 | $.1433470889348.name |
+| Voiced                                             | 1342699555444 | $.1342699555444.name |
+
+** Now we need to know the fieldnames per model
+
+Again, we create a view to make our life easier;
+
+   #+begin_src sqlite
+drop view if exists modelfields;
+create view modelfields as
+
+with t as (
+  select r.*, substr(r.fullkey, instr(r.fullkey, "[")+1) as fullkey2,
+   substr(r.fullkey, 3, instr(r.fullkey, ".flds[")-3) as mid
+  from col, json_tree(col.models) as r where r.key = 'name' and r.fullkey regexp 'flds\[[0-9]\]'
+   and fullkey2 <> fullkey -- make sure that there was a [ in fullkey
+   ),
+
+  r as (select *, substr(fullkey2, 0, length(fullkey2)-5) as findex from t)
+
+select mid, value as fname, findex, fullkey from r;
+
+-- select r.type, r.id, r.fullkey, r.key, r.value from col, json_tree(col.models) as r where r.key = 'name';
+--  substr(r.fullkey2, 0, length(r.fullkey)-4) as fname,
+--   substr(r.fullkey, 0, length(r.fullkey)-4) as fname,
+
+     #+end_src
+   #+end_src
+
+The result has 4 fields. the mid, the fieldname, the index of the field (based 0), and the original data. These are the first 5 fields in my database
+
+#+begin_src sqlite
+select * from modelfields limit 5;
+#+end_src
+
+#+RESULTS:
+|           mid | fname                                                        | findex | fullkey                      |
+|---------------+--------------------------------------------------------------+--------+------------------------------|
+| 1408314099568 | Radical (口, 厂)                                             |      0 | $.1408314099568.flds[0].name |
+| 1408314099568 | Mnemonic Image (Soccer ball, alligator mouth. Use a picture) |      1 | $.1408314099568.flds[1].name |
+| 1408314099568 | strokes                                                      |      2 | $.1408314099568.flds[2].name |
+| 1408314099568 | (Optional) Example words/pictures for this radical (古, 原)  |      3 | $.1408314099568.flds[3].name |
+| 1408314099568 | Optional: Stroke Order Diagram                               |      4 | $.1408314099568.flds[4].name |
+
+** now we need to know the cards that are due in the active cards:
+
+Anki stores due dates as days-since-deck creation. So let us change that to
+UNIX timestamps (and some more readable fields). This query will
+retrieve the next 10 cards. the fields are:
+
+| dueh  | due date                                                     |
+| id    | cardid                                                       |
+| due   | due (as days since creation of collection as anki stores it) |
+| duets | due UNIX timestamp                                           |
+
+the rest are the original fields of the card
+
+#+begin_src sqlite
+with nextones as (
+   select id, due, crt,
+      crt + due * (60 * 60 *24)  as duets,
+      *  from cards, (select crt from col)  where type = 2 and queue >= 0)
+   select datetime(duets, 'unixepoch', 'localtime') as dueh, *  from nextones
+   order by duets
+limit 10;
+#+end_src
+
+#+RESULTS:
+| dueh                |            id | due |        crt |      duets |          id:1 |           nid |           did | ord |        mod | usn | type | queue | due:1 | ivl | factor | reps | lapses | left | odue | odid | flags | data |      crt:1 |
+|---------------------+---------------+-----+------------+------------+---------------+---------------+---------------+-----+------------+-----+------+-------+-------+-----+--------+------+--------+------+------+------+-------+------+------------|
+| 2020-01-15 03:00:00 | 1492388968789 | 238 | 1558522800 | 1579086000 | 1492388968789 | 1492388939250 | 1561828200497 |   0 | 1578995576 | 920 |    2 |     2 |   238 |   2 |   2500 |    9 |      2 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492392227891 | 238 | 1558522800 | 1579086000 | 1492392227891 | 1492392219618 | 1561828200497 |   0 | 1575981589 | 876 |    2 |     2 |   238 |  36 |   2500 |   35 |      7 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492392979488 | 238 | 1558522800 | 1579086000 | 1492392979488 | 1492392874810 | 1561828200497 |   0 | 1571985356 | 779 |    2 |     2 |   238 |  83 |   2500 |   16 |      3 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492394184402 | 238 | 1558522800 | 1579086000 | 1492394184402 | 1492394153164 | 1561828200497 |   0 | 1578995619 | 920 |    2 |     2 |   238 |   2 |   2500 |   20 |      6 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492394655713 | 238 | 1558522800 | 1579086000 | 1492394655713 | 1492394644347 | 1561828200497 |   0 | 1578995642 | 920 |    2 |     2 |   238 |   2 |   2500 |   14 |      4 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492395129747 | 238 | 1558522800 | 1579086000 | 1492395129747 | 1492395114352 | 1561828200497 |   0 | 1573460713 | 822 |    2 |     2 |   238 |  66 |   2500 |   18 |      3 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492396075467 | 238 | 1558522800 | 1579086000 | 1492396075467 | 1492396032614 | 1561828200497 |   0 | 1576079580 | 877 |    2 |     2 |   238 |  35 |   2500 |   44 |      8 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492396940431 | 238 | 1558522800 | 1579086000 | 1492396940431 | 1492396896890 | 1561828200497 |   0 | 1576916140 | 883 |    2 |     2 |   238 |  26 |   2500 |   30 |      6 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492398038673 | 238 | 1558522800 | 1579086000 | 1492398038673 | 1492398023585 | 1561828200497 |   0 | 1578995561 | 920 |    2 |     2 |   238 |   2 |   2500 |   12 |      2 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+| 2020-01-15 03:00:00 | 1492399197065 | 238 | 1558522800 | 1579086000 | 1492399197065 | 1492399168104 | 1561828200497 |   0 | 1578995591 | 920 |    2 |     2 |   238 |   2 |   2500 |   10 |      2 | 1001 |    0 |    0 |     0 |      | 1558522800 |
+
+** we need to combine the info of the cards with notes, so we know the modelid
+
+
+Again, create a view. My view lists the next 100 cards. See limit below:
+
+#+begin_src sqlite
+drop view if exists nextcards;
+create view nextcards as
+with nextones as (
+   select id, mod, due, crt, crt + due * (60 * 60 *24)  as duets,*  from cards, (select crt from col)  where type = 2 and queue >= 0
+   order by duets
+   limit 100)
+select id, did, nid, due, duets, datetime(duets, 'unixepoch', 'localtime') as dueh,
+        (duets - (SELECT strftime('%s','now'))) /(24*60*60) as daysdue  from nextones;
+#+end_src
+
+#+RESULTS:
+#+begin_src sqlite
+select * from nextcards limit 10;
+#+end_src
+
+#+RESULTS:
+|            id |           did |           nid | due |      duets | dueh                | daysdue |
+|---------------+---------------+---------------+-----+------------+---------------------+---------|
+| 1492388968789 | 1561828200497 | 1492388939250 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492392227891 | 1561828200497 | 1492392219618 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492392979488 | 1561828200497 | 1492392874810 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492394184402 | 1561828200497 | 1492394153164 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492394655713 | 1561828200497 | 1492394644347 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492395129747 | 1561828200497 | 1492395114352 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492396075467 | 1561828200497 | 1492396032614 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492396940431 | 1561828200497 | 1492396896890 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492398038673 | 1561828200497 | 1492398023585 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+| 1492399197065 | 1561828200497 | 1492399168104 | 238 | 1579086000 | 2020-01-15 03:00:00 |      -2 |
+
+* Put everything together
+
+Now we can ask, for the cards that are to be reviewed, output only the "Audio"  field. Note that these cards are due in the past :)
+it is now trivial to write a script that will take this output and create an immersion file. And this is *result* we were looking for:
+
+#+begin_src sqlite
+select modelname, mid, daysdue, fname, anki_getfld(flds, findex+1) from
+    nextcards nc
+  join
+     notes n on (nc.nid = n.id)
+  join
+     modelfields mn using(mid)
+  join
+     modelnames using (mid)
+where fname = 'Audio'
+limit 10;
+#+end_src
+
+#+RESULTS:
+| modelname     |           mid | daysdue | fname | anki_getfld(flds, findex+1) |
+|---------------+---------------+---------+-------+-----------------------------|
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:けつえき.mp3]        |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:顔.mp3]<br>          |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:したがう.mp3]        |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:じごく.mp3]          |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:しま.mp3]            |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:べんごし.mp3]        |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:いちば.mp3]          |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:りんじん.mp3]        |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:しはらう.mp3]        |
+| fluentForever | 1481407448472 |      -2 | Audio | [sound:しゅうきょう.mp3]    |
