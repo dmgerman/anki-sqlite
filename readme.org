@@ -45,8 +45,8 @@ warn you, you need to know the way the decks are stored in the database.
 * Example of how to use
 
 In this example, I have the following use case. I want to make a tape with audio files referenced in the cards that are due in the short future.
-E.g., I want to create an audio with the audio of the next 100 cards to review. But to this I first need to extract
-*the contents of the specific fields (e.g. "Audio" in the next cards that are due. This can be done within Anki using
+E.g., I want to create an audio file with the audio of the next 100 cards to review. But to do this I first need to extract
+the contents of the specific fields (e.g. "Audio" in the next cards that are due). This can be done within Anki using
 python, but I want to do it directly from SQL.
 
 So the goal is to create a query that lists the contents of the Audio field of the cards next to be review (100 in this example)
