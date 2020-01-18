@@ -111,10 +111,6 @@ with t as (
 
 select mid, value as fname, findex, fullkey from r;
 
--- select r.type, r.id, r.fullkey, r.key, r.value from col, json_tree(col.models) as r where r.key = 'name';
---  substr(r.fullkey2, 0, length(r.fullkey)-4) as fname,
---   substr(r.fullkey, 0, length(r.fullkey)-4) as fname,
-
      #+end_src
    #+end_src
 
