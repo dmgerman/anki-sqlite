@@ -4,7 +4,7 @@
 #+SEQ_TODO: TODO(t) STARTED(s) DEFERRED(r) CANCELLED(c) | WAITING(w) DELEGATED(d) APPT(a) DONE(d)
 #+DRAWERS: HIDDEN STATE
 #+ARCHIVE: %s_done::
-#+TITLE: SQLLite support for  accessing Anki fields
+#+TITLE: SQLite support for  accessing Anki fields
 #+CATEGORY:
 #+PROPERTY: header-args:sql             :engine postgresql  :exports both :cmdline csc370
 #+PROPERTY: header-args:sqlite          :db /tmp/collection.anki2  :colnames yes
