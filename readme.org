@@ -1,0 +1,28 @@
+#+STARTUP: showall
+#+STARTUP: lognotestate
+#+TAGS: research(r) uvic(u) today(y) todo(t) cooking(c)
+#+SEQ_TODO: TODO(t) STARTED(s) DEFERRED(r) CANCELLED(c) | WAITING(w) DELEGATED(d) APPT(a) DONE(d)
+#+DRAWERS: HIDDEN STATE
+#+ARCHIVE: %s_done::
+#+TITLE: anki-tools
+#+CATEGORY:
+#+PROPERTY: header-args:sql             :engine postgresql  :exports both :cmdline csc370
+#+PROPERTY: header-args:sqlite          :db /path/to/db  :colnames yes
+#+PROPERTY: header-args:C++             :results output :flags -std=c++14 -Wall --pedantic -Werror
+#+PROPERTY: header-args:R               :results output  :colnames yes
+#+OPTIONS: ^:nil
+
+* Anki tools
+
+These are some utilities and libraries that I have been creating to query the Anki database.
+
+
+** anki-sqlite
+
+This is a dynamic library that adds two functions to command line sqlite to be able to access and modify fields
+of notes in Anki
+
+** audio-list
+
+This is a script that queries the Anki database for the next cards to review and prints the contents of the Audio
+field (by default, but it can be any field) of the card along with scheduling information.
