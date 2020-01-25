@@ -12,8 +12,6 @@
 #+PROPERTY: header-args:R               :results output  :colnames yes
 #+OPTIONS: ^:nil
 
-* Listing the cards that will be reviewed, including their audio field
-
 ** Introduction
 
 The use case is the following: I want to be able to create an immersion file from the audio of the cards I have learned that

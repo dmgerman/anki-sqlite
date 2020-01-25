@@ -12,8 +12,6 @@
 #+PROPERTY: header-args:R               :results output  :colnames yes
 #+OPTIONS: ^:nil
 
-* Anki tools
-
 These are some utilities and libraries that I have been creating to query the Anki database.
 
 
