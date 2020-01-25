@@ -63,8 +63,8 @@ Anki stores a "model" for each type of note. This model can be retrieved with th
 Let us make it a view, so we can more easily use it:
 
 #+begin_src sqlite
-drop view if exists modelnames;
-create view modelnames as
+drop table if exists modelnames;
+create table modelnames as
   select value as modelname,
     substr(substr(r.fullkey, 3), 0, length(r.fullkey)-5)  as mid,
     r.fullkey from col, json_tree(col.models) as r

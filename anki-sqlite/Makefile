@@ -12,6 +12,10 @@ DESTDIR=/
 anki.so : anki.c
 	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror anki.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
 
+extension-functions.so : extension-functions.c
+	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W extension-functions.c ${LIBS} ${LDFLAGS} -Wl,-z,defs -lm
+
+
 
 pcre.so : pcre.c
 	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror pcre.c ${LIBS} ${LDFLAGS} -Wl,-z,defs

@@ -1,0 +1,137 @@
+#+STARTUP: showall
+#+STARTUP: lognotestate
+#+TAGS: research(r) uvic(u) today(y) todo(t) cooking(c)
+#+SEQ_TODO: TODO(t) STARTED(s) DEFERRED(r) CANCELLED(c) | WAITING(w) DELEGATED(d) APPT(a) DONE(d)
+#+DRAWERS: HIDDEN STATE
+#+ARCHIVE: %s_done::
+#+TITLE: Listing the cards that will be reviewed, including their audio field
+#+CATEGORY:
+#+PROPERTY: header-args:sql             :engine postgresql  :exports both :cmdline csc370
+#+PROPERTY: header-args:sqlite          :db /path/to/db  :colnames yes
+#+PROPERTY: header-args:C++             :results output :flags -std=c++14 -Wall --pedantic -Werror
+#+PROPERTY: header-args:R               :results output  :colnames yes
+#+OPTIONS: ^:nil
+
+* Listing the cards that will be reviewed, including their audio field
+
+** Introduction
+
+The use case is the following: I want to be able to create an immersion file from the audio of the cards I have learned that
+are  to be reviewed in the following days.
+
+Extracting this information from anki is difficult because it stores its data in a very ad-hoc manner.
+
+This script scans an Anki database and extracts all the cards that are due in the future,
+and prints some information about them.
+
+** anki-audio-list.pl
+
+This program lists the modelname, date of next repetition (both human readable and timett),
+a field in the card (default is Audio, the type of card, queue, due, ivl, factor, reps (number of reps),
+and lapses (number of lapses). For more information on these fields see the schema of cards in
+https://github.com/ankidroid/Anki-Android/wiki/Database-Structure
+
+For example, these are the first 10 cards in my collection:
+
+| Modelname     | duedatestr          | duetimestamp | audio            | type | queue | due | ivl | factor | reps | lapses |
+|---------------+---------------------+--------------+------------------+------+-------+-----+-----+--------+------+--------|
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:1000.mp3] |    2 |     2 | 247 |   7 |   2500 |   17 |      4 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:104.mp3]  |    2 |     2 | 247 |  51 |   2500 |   27 |      5 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:466.mp3]  |    2 |     2 | 247 |  22 |   2500 |   32 |      7 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:613.mp3]  |    2 |     2 | 247 |  41 |   2500 |    6 |      0 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:616.mp3]  |    2 |     2 | 247 |  43 |   2500 |    6 |      0 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:629.mp3]  |    2 |     2 | 247 |  20 |   2500 |   12 |      2 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:635.mp3]  |    2 |     2 | 247 |  40 |   2500 |    6 |      0 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:652.mp3]  |    2 |     2 | 247 |  35 |   2500 |    9 |      1 |
+| jalupBeginner | 2020-01-24 03:00:00 |   1579863600 | [sound:677.mp3]  |    2 |     2 | 247 |  22 |   2500 |   18 |      4 |
+
+The output of the program is a CSV file with tab as the delimiter. You can process this data easily
+with any tool that reads csv files.
+
+* How to install
+
+At this point, all you have to do is install, perl, the perl DBI and DBD-bsqlite libraries.
+
+You have to run the script from the command line as follows from the directory where it is found.
+
+#+begin_src
+perl anki-audio-list.pl --help
+#+end_src
+
+
+
+* How to run
+
+Do not run on a collection that Anki is currently using. Anki does not like to "share". Instead,
+quit Anki, make a copy of the collection.anki2 and then run this script on that copy.
+
+
+  #+begin_src example
+NAME
+            anki_list_audio - listing audio fields from an Anki collection.
+
+SYNOPSIS
+    anki_list_audio <options*> collectionFile [modelnames]
+
+                Use --help for more info.
+
+DESCRIPTION
+    This program can be used to extract information of anki cards that are
+    due in the future.
+
+    It prints a tab-delimited lists of the next cards to review, including a
+    specific field (by default Audio).
+
+    Note that only cards that contain the specific field are printed.
+
+        collectionFile: corresponds to the anki collection file (collection.anki2 )
+
+        modelnames: narrow the output to a list of models. See --print_models below
+            for a list of models in the collection
+
+EXAMPLES
+      1) print the next 100 cards in the models 'jalupBeginner' and 'n5tango'
+
+        anki_list_audio --cards=100 collection.anki2 jalupBeginner n5tango'
+
+      2) print all the cards to be reviewed that have field name "Audio on Front"
+
+        anki_list_audio --field='Audio on Front' collection.anki2
+
+      3) print all models and their fields
+
+        anki_list_audio --print-fields collection.anki2
+
+      4) print all models and their fields of the n5tango model:
+
+        anki_list_audio --print-fields collection.anki2 n5tango
+
+    See options below for more features.
+
+OPTIONS
+    --help  Print a brief help message and exits.
+
+    --print-models
+            Prints the names of all models in the collection. Note that
+            cards of different models can be in the same deck. Therefore, a
+            model can span multiple decks. The model defines the fields a
+            card can have.
+
+    --print-fields
+            Prints the field names for the models in the collection
+
+    --create-tables
+            We create two temporary tables in the collection that contain
+            the information about the models and their fields. If you want
+            them to be permanent, enable this option.
+
+    --cards=n
+            By default, it print all the cards due in the future. If you
+            specify a number, it will print the n cards (order by their due
+            date--sooner first).
+
+    --verbose
+            Print some debug information.
+
+
+  #+end_src
