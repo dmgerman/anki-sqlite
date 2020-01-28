@@ -20,6 +20,55 @@ use strict;
 my $sep = chr(31);
 my $dbh;
 
+my $DROP_MODEL = <<END;
+drop table if exists modelinfo;
+END
+
+
+my $CREATE_MODEL = <<END;
+CREATE TABLE modelinfo as
+  SELECT value as modelname,
+  substr(substr(r.fullkey, 3), 0, instr(substr(r.fullkey, 3), '.'))  as mid,
+     r.fullkey from col, json_tree(col.models) as r
+  where r.key = 'name' and (r.fullkey regexp '^\\\$\\.[0-9]+\\.name\$')
+;
+END
+
+my $DROP_MODEL_FIELDS = <<END;
+drop table if exists modelfields;
+END
+
+my $CREATE_MODEL_FIELDS = <<END;
+create table modelfields as
+  with t as (
+           select r.*, substr(r.fullkey, instr(r.fullkey, "[")+1) as fullkey2,
+           substr(r.fullkey, 3, instr(r.fullkey, ".flds[")-3) as mid
+           from col, json_tree(col.models) as r where r.key = 'name' and r.fullkey regexp 'flds\\\[[0-9]+\\\]'
+            and fullkey2 <> fullkey -- make sure that there was a [ in fullkey
+                                                                  ),
+
+           r as (select *, substr(fullkey2, 0, length(fullkey2)-5) as findex from t)
+
+                  select mid, value as fname, findex, fullkey from r;
+END
+
+
+my $QUERY_MODELS_INFO = <<END;
+select modelname, count(distinct notes.id) as notes, count(*) cards, sum(queue>0) reviewed
+  from modelinfo join notes using (mid)
+    join cards on (notes.id = cards.nid)
+  group by modelname;
+END
+
+my $QUERY_MODELS_FIELDS = <<END;
+select modelname, fname, findex
+   from modelinfo left join modelfields using (mid)
+order by modelname, cast(findex as int);
+END
+
+
+
+
 sub Count_Fields  {
     my ($st) = @_;
 
@@ -150,6 +199,77 @@ sub Commit {
 sub Disconnect {
     $dbh -> disconnect();
 }
+
+sub Create_Model_Tables {
+    my ($commit) = @_;
+
+    print STDERR "Creating model tables. This guarantees they are up to date\n";
+
+    Simple_Query($DROP_MODEL);
+    Simple_Query($CREATE_MODEL);
+
+    Simple_Query($DROP_MODEL_FIELDS);
+    Simple_Query($CREATE_MODEL_FIELDS);
+
+    my $count = Simple_Query("select count(*) from modelinfo");
+#    print STDERR "$count models found\n" if $verbose;
+
+    Commit() if $commit;
+
+
+}
+
+
+sub Print_Models {
+    my (@models) = @_;
+    Do_Report($QUERY_MODELS_INFO, 'group by', 'where',
+              @models);
+
+}
+
+sub Print_Models_Fields {
+    my (@models) = @_;
+
+    Do_Report($QUERY_MODELS_FIELDS, 'order by', 'where',
+              @models);
+
+}
+
+#QUERY_MODELS_FIELDS_HEADER
+#        $QUERY_MODELS_FIELDS;
+sub Do_Report {
+    my ($query, $whereLoc, $before, @models) = @_;
+
+
+    # build the query with a where clause if necessary
+
+    $query = Extend_Where_Model($query, $whereLoc, $before,
+                                @models);
+
+    Do_Complex_Query_With_Header($query);
+
+}
+
+
+sub Extend_Where_Model {
+    my ($query, $location, $before, @vals) = @_;
+
+    if (scalar(@vals) > 0) {
+        # build the query with a where clause
+
+        my $exp = "'" . join("','", @vals). "'";
+        #        print "$exp\n";
+
+        #        print $query
+        $query =~ s/$location/$before modelname IN ($exp) $location/;
+
+    }
+    return $query;
+
+}
+
+
+
 
 
 1;

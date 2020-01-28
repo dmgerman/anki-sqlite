@@ -26,6 +26,30 @@ use Pod::Usage qw(pod2usage);
 require "./anki.pm";
 
 
+my $QUERY_NEXT_CARDS_AUDIO = <<END;
+with toreviewraw as (
+                   select id as cid, nid,
+                      due as dueanki,
+                     crt + due * (60 * 60 *24)  as duetimestamp,
+                   *  from cards, (select crt from col)  where type = 2 and queue >= 0
+                    ),
+     toreview as (
+        select datetime(duetimestamp, 'unixepoch', 'localtime') as duedatestr, *
+         from toreviewraw
+     )
+  select modelname, duedatestr, duetimestamp, fld_get(notes.flds,findex) as audio, type, queue, due, ivl, factor, reps, lapses
+    from toreview r
+      left join notes on (notes.id = r.nid)
+      left join modelinfo using (mid)
+      left join modelfields using (mid)
+  where fname = ?
+order by duetimestamp, modelname, audio
+limit ?
+;
+
+END
+
+
 
 my $printModels = 0;
 my $printFields = 0;
@@ -61,79 +85,6 @@ pod2usage(2) if (not defined $collection );
 my @models = @ARGV;
 
 
-my $DROP_MODEL = <<END;
-drop table if exists modelinfo;
-END
-
-
-
-my $CREATE_MODEL = <<END;
-CREATE TABLE modelinfo as
-  SELECT value as modelname,
-  substr(substr(r.fullkey, 3), 0, instr(substr(r.fullkey, 3), '.'))  as mid,
-     r.fullkey from col, json_tree(col.models) as r
-  where r.key = 'name' and (r.fullkey regexp '^\\\$\\.[0-9]+\\.name\$')
-;
-END
-
-my $DROP_MODEL_FIELDS = <<END;
-drop table if exists modelfields;
-END
-
-my $CREATE_MODEL_FIELDS = <<END;
-create table modelfields as
-  with t as (
-           select r.*, substr(r.fullkey, instr(r.fullkey, "[")+1) as fullkey2,
-           substr(r.fullkey, 3, instr(r.fullkey, ".flds[")-3) as mid
-           from col, json_tree(col.models) as r where r.key = 'name' and r.fullkey regexp 'flds\\\[[0-9]\\\]'
-            and fullkey2 <> fullkey -- make sure that there was a [ in fullkey
-                                                                  ),
-
-           r as (select *, substr(fullkey2, 0, length(fullkey2)-5) as findex from t)
-
-                  select mid, value as fname, findex, fullkey from r;
-END
-
-
-my $QUERY_MODELS_INFO = <<END;
-select modelname, count(distinct notes.id) as notes, count(*) cards, sum(queue>0) reviewed
-  from modelinfo join notes using (mid)
-    join cards on (notes.id = cards.nid)
-  group by modelname;
-END
-
-my $QUERY_MODELS_FIELDS = <<END;
-select modelname, fname, findex
-   from modelinfo left join modelfields using (mid)
-order by modelname, cast(findex as int);
-END
-
-
-
-my $QUERY_NEXT_CARDS_AUDIO = <<END;
-with toreviewraw as (
-                   select id as cid, nid,
-                      due as dueanki,
-                     crt + due * (60 * 60 *24)  as duetimestamp,
-                   *  from cards, (select crt from col)  where type = 2 and queue >= 0
-                    ),
-     toreview as (
-        select datetime(duetimestamp, 'unixepoch', 'localtime') as duedatestr, *
-         from toreviewraw
-     )
-  select modelname, duedatestr, duetimestamp, fld_get(notes.flds,findex) as audio, type, queue, due, ivl, factor, reps, lapses
-    from toreview r
-      left join notes on (notes.id = r.nid)
-      left join modelinfo using (mid)
-      left join modelfields using (mid)
-  where fname = ?
-order by duetimestamp, modelname, audio
-limit ?
-;
-
-END
-
-
 if (not -f $collection) {
     print STDERR "Collection [$collection] does not exist\n\n";
     pod2usage(2);
@@ -142,7 +93,7 @@ if (not -f $collection) {
 
 Open_Anki($collection) or die "Unable to open collection [$collection]";
 
-Create_Tables();
+Create_Model_Tables();
 
 if ($printModels) {
     Print_Models(@models);
@@ -178,72 +129,8 @@ sub Print_Audio {
 
 
 
-sub Print_Models {
-    my (@models) = @_;
-    Do_Report($QUERY_MODELS_INFO, 'group by', 'where',
-              @models);
-
-}
-
-sub Print_Models_Fields {
-    my (@models) = @_;
-
-    Do_Report($QUERY_MODELS_FIELDS, 'order by', 'where',
-              @models);
-
-}
-
-#QUERY_MODELS_FIELDS_HEADER
-#        $QUERY_MODELS_FIELDS;
-sub Do_Report {
-    my ($query, $whereLoc, $before, @models) = @_;
 
 
-    # build the query with a where clause if necessary
-
-    $query = Extend_Where_Model($query, $whereLoc, $before,
-                                @models);
-
-    Do_Complex_Query_With_Header($query);
-
-}
-
-
-sub Extend_Where_Model {
-    my ($query, $location, $before, @vals) = @_;
-
-    if (scalar(@vals) > 0) {
-        # build the query with a where clause
-
-        my $exp = "'" . join("','", @vals). "'";
-        #        print "$exp\n";
-
-        #        print $query
-        $query =~ s/$location/$before modelname IN ($exp) $location/;
-
-    }
-    return $query;
-
-}
-
-
-
-sub Create_Tables {
-    print STDERR "Creating model tables\n";
-
-    Simple_Query($DROP_MODEL);
-    Simple_Query($CREATE_MODEL);
-
-    Simple_Query($DROP_MODEL_FIELDS);
-    Simple_Query($CREATE_MODEL_FIELDS);
-
-    my $count = Simple_Query("select count(*) from modelinfo");
-    print STDERR "$count models found\n" if $verbose;
-
-    Commit() if $createTables;
-
-
-}
 
 
 #-----------------------------------------------------------------
