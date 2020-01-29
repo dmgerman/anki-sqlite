@@ -136,7 +136,7 @@ sub Open_Anki {
 
     $dbh->sqlite_create_function( 'fld_count', 1, \&Count_Fields );
     $dbh->sqlite_create_function( 'fld_get', 2, \&Get_Field );
-        $dbh->sqlite_create_function( 'fld_replace', 3, \&Replace_Field );
+    $dbh->sqlite_create_function( 'fld_replace', 3, \&Replace_Field );
 
     return $dbh;
 }
@@ -203,8 +203,6 @@ sub Disconnect {
 sub Create_Model_Tables {
     my ($commit) = @_;
 
-    print STDERR "Creating model tables. This guarantees they are up to date\n";
-
     Simple_Query($DROP_MODEL);
     Simple_Query($CREATE_MODEL);
 
@@ -212,16 +210,19 @@ sub Create_Model_Tables {
     Simple_Query($CREATE_MODEL_FIELDS);
 
     my $count = Simple_Query("select count(*) from modelinfo");
-#    print STDERR "$count models found\n" if $verbose;
-
-    Commit() if $commit;
 
 
+    if ($commit ) {
+        print STDERR "Creating model tables.\n";
+        print STDERR "$count models found\n" ;
+        Commit() ;
+    }
 }
 
 
 sub Print_Models {
     my (@models) = @_;
+
     Do_Report($QUERY_MODELS_INFO, 'group by', 'where',
               @models);
 
@@ -249,6 +250,22 @@ sub Do_Report {
     Do_Complex_Query_With_Header($query);
 
 }
+
+
+sub Anki_Model_Id {
+    my ($modelName) = @_;
+    my $r = Simple_Query("select mid from modelinfo where modelname = ?", $modelName);
+#    print "->[$r]\n";
+    return $r;
+}
+
+sub Anki_Field_Id {
+    my ($modelName, $fieldName) = @_;
+    my $r = Simple_Query("select findex from modelinfo join modelfields using (mid)  where modelname = ? and fname = ?", $modelName, $fieldName);
+#    print "->[$r]\n";
+    return $r;
+}
+
 
 
 sub Extend_Where_Model {

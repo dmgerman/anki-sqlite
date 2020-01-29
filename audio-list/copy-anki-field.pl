@@ -46,7 +46,6 @@ with toreviewraw as (
 order by duetimestamp, modelname, audio
 limit ?
 ;
-
 END
 
 
@@ -56,10 +55,8 @@ my $printFields = 0;
 my $createTables = 0;
 
 my $debug = 0;
+my $dryRun = 0;
 
-my $printAudio = 1;
-
-my $numberCards = -1;
 
 my $fieldName = 'Audio';
 my $help;
@@ -69,8 +66,7 @@ my $verbose;
 GetOptions ("print-models" => \$printModels,
             "print-fields"   => \$printFields,
             "create-tables" => \$createTables,
-            "field=s" => \$fieldName,
-            "cards=i" => \$numberCards,
+            "dry-run" => \$dryRun,
             "help|?" => \$help,
             "verbose"  => \$verbose)   # flag
         or pod2usage(1);
@@ -79,10 +75,34 @@ pod2usage(-verbose=>3) if $help;
 
 
 my $collection = shift;
+my $model = shift;
+my $src = shift;
+my $dst = shift;
 
-pod2usage(2) if (not defined $collection );
+pod2usage(2) if (not (defined $collection ));
 
-my @models = @ARGV;
+Open_Anki($collection) or die "Unable to open collection [$collection]";
+
+my @models = ();
+
+if ($model) {
+    @models = ($model);
+}
+
+if ($printModels or $printFields) {
+
+    Print_Models(@models) if $printModels;
+    Print_Models_Fields(@models) if $printFields;
+
+    exit 0 if not defined($src);
+
+}
+
+pod2usage(2) if (not (defined $collection  and
+                      defined $model and
+                      defined $src and
+                      defined $dst));
+
 
 
 if (not -f $collection) {
@@ -91,41 +111,48 @@ if (not -f $collection) {
 }
 
 
-Open_Anki($collection) or die "Unable to open collection [$collection]";
+Create_Model_Tables( (not $dryRun) and ($createTables > 0 ));
 
-Create_Model_Tables($createTables);
+print STDERR "Copying field [$src] to [$dst] in [$model]\n";
 
-if ($printModels) {
-    Print_Models(@models);
+my $modelId = Anki_Model_Id($model) || pod2usage("Model [$model] does not exist");
+
+my $dstId = Anki_Field_Id($model, $dst);
+if (not defined $dstId) {
+    pod2usage("Field [$dst] in Model [$model] does not exist");
 }
 
-if ($printFields) {
-    Print_Models_Fields(@models);
+
+if ($src ne "__ROW_NUMBER__") {
+   my $srcId = Anki_Field_Id($model, $src);
+   if (not defined $srcId) {
+       pod2usage("Field [$src] in Model [$model] does not exist");
+   }
+   print STDERR "Copying field [$src] to [$dst] in [$model] [$modelId][$srcId][$dstId]\n";
+
+   Do_SQL("update notes set flds = fld_replace(flds, ?, fld_get(flds, ?)) where mid = ?",
+          $dstId, $srcId, $modelId);
+
+} else {
+
+    print STDERR "Using notes number instead of source field value\n";
+
+# create table with noteid and row number, easier to do the update, and faster
+    Do_SQL("create temp table rip as select id, row_number() over (order by id) as idx from notes where mid = ?",
+           $modelId);
+    Do_SQL("create index ripidx on rip(idx);");
+
+    Do_SQL("update notes set flds = fld_replace(flds, ?, (select idx from rip where notes.id = rip.id)) where mid = ?",
+           $dstId, $modelId);
 }
 
-exit 0 if ($printFields or $printModels );
 
-if ($printAudio) {
-    Print_Audio($numberCards, $fieldName, @models);
-}
 
+Commit() if not $dryRun;
 
 exit 0; # this is the end...
 
 #------------------------------
-
-sub Print_Audio {
-    my ($days, $field, @models) = @_;
-
-    my $query = Extend_Where_Model($QUERY_NEXT_CARDS_AUDIO, "order by ",
-                                   'and',
-                                   @models);
-
-    print "$query\n" if $debug;
-
-    Do_Complex_Query_With_Header($query, $fieldName, $days);
-
-}
 
 
 
@@ -137,47 +164,24 @@ sub Print_Audio {
 #----------------  Documentation / Usage / Help ------------------
 =head1 NAME
 
-        anki_list_audio - listing audio fields from an Anki collection.
+        anki_copy_fields - copy one field into another in all notes that share the same model
 
 =head1 SYNOPSIS
 
-anki_list_audio <options*> collectionFile [modelnames]
+anki_copy_fields <options*> collectionFile modelname sourceFieldName destinationFieldName
 
             Use --help for more info.
 
 =head1 DESCRIPTION
 
-This program can be used to extract information of anki cards that are due in
-the future.
+    This program  copies the value of one field from one card to another for all cards in a given mode.
 
-It prints a tab-delimited lists of the next cards to review, including a
-specific field (by default Audio).
-
-Note that only cards that contain the specific field are printed.
-
-    collectionFile: corresponds to the anki collection file (collection.anki2 )
-
-    modelnames: narrow the output to a list of models. See --print_models below
-        for a list of models in the collection
+    It is also capable of replacing a field with the number of card in the model (not in the deck). In that case,
+    use as the source field name __ROW_NUMBER__
 
 =head1 EXAMPLES
 
-  1) print the next 100 cards in the models 'jalupBeginner' and 'n5tango'
-
-    anki_list_audio --cards=100 collection.anki2 jalupBeginner n5tango'
-
-  2) print all the cards to be reviewed that have field name "Audio on Front"
-
-    anki_list_audio --field='Audio on Front' collection.anki2
-
-  3) print all models and their fields
-
-    anki_list_audio --print-fields collection.anki2
-
-  4) print all models and their fields of the n5tango model:
-
-    anki_list_audio --print-fields collection.anki2 n5tango
-
+  1) ...
 
 See options below for more features.
 
@@ -203,10 +207,9 @@ Prints the field names for the models in the collection
 We create two temporary tables in the collection that contain the information about the models and their fields.
 If you want them to be permanent, enable this option.
 
-=item B<--cards=n>
+=item B<--dry-run>
 
-By default, it print all the cards due in the future.
-If you specify a number, it will print the n cards (order by their due date--sooner first).
+Do not actually do the copy. Simply report the number of fields copied.
 
 =item B<--verbose>
 
