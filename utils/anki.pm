@@ -34,6 +34,19 @@ CREATE TABLE modelinfo as
 ;
 END
 
+my $DROP_DECK = <<END;
+drop table if exists deckinfo;
+END
+
+my $CREATE_DECK = <<END;
+create table deckinfo as
+        SELECT value as deckname,
+        substr(substr(r.fullkey, 3), 0, instr(substr(r.fullkey, 3), '.'))  as did,
+        r.fullkey from col, json_tree(col.decks) as r
+        where r.key = 'name';
+END
+
+
 my $DROP_MODEL_FIELDS = <<END;
 drop table if exists modelfields;
 END
@@ -66,7 +79,15 @@ select modelname, fname, findex
 order by modelname, cast(findex as int);
 END
 
-
+my $QUERY_DECKS_INFO = <<END;
+select deckname, modelname, count(distinct notes.id) as notes, count(distinct cards.id) as  cards, count(distinct revlog.cid) as nreviewed, count(revlog.cid) as nreviews
+  from modelinfo join notes using (mid)
+    join cards on (notes.id = cards.nid) join deckinfo using (did)
+    left join revlog on (revlog.cid = cards.id)
+  group by modelname, deckname
+order by deckname, modelname
+;
+END
 
 
 sub Count_Fields  {
@@ -217,6 +238,29 @@ sub Create_Model_Tables {
         print STDERR "$count models found\n" ;
         Commit() ;
     }
+}
+
+sub Create_Deck_Tables {
+    my ($commit) = @_;
+
+    Do_SQL($DROP_DECK);
+    Do_SQL($CREATE_DECK);
+
+    my $count = Simple_Query("select count(*) from deckinfo");
+
+    if ($commit ) {
+        print STDERR "Creating deck tables.\n";
+        print STDERR "$count decks found\n" ;
+        Commit() ;
+    }
+}
+
+sub Print_Decks {
+    my (@models) = @_;
+
+    Do_Report($QUERY_DECKS_INFO, 'group by', 'where',
+              @models);
+
 }
 
 

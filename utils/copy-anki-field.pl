@@ -89,6 +89,8 @@ if ($model) {
     @models = ($model);
 }
 
+Create_Model_Tables( (not $dryRun) and ($createTables > 0 ));
+
 if ($printModels or $printFields) {
 
     Print_Models(@models) if $printModels;
@@ -111,7 +113,6 @@ if (not -f $collection) {
 }
 
 
-Create_Model_Tables( (not $dryRun) and ($createTables > 0 ));
 
 print STDERR "Copying field [$src] to [$dst] in [$model]\n";
 
