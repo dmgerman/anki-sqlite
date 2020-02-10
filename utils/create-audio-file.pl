@@ -9,9 +9,14 @@ die "Not an anki directory [$ANKIDIR]" unless -f "$ANKIDIR/collection.anki2";
 my @files ;
 my @reps;
 
+# how many times each file is played contiguously
+my $REPS = 2;
+
+
 my $AUDIO_IDX =2 ;
 my $TYPE_IDX = 8;
 my $LASTIVL_IDX= 5;
+my $IVL_IDX = 4;
 my $MODEL_IDX = 0;
 my $TIME_IDX =7;
 
@@ -24,6 +29,7 @@ my $i = 0;
 
 
 {
+    # very parms
     my $l = <>;
     chomp $l;
     my @f = split('\t', $l);
@@ -37,6 +43,7 @@ my $i = 0;
     Verify_Field($AUDIO_IDX, 'audio');
     Verify_Field($TYPE_IDX, 'type');
     Verify_Field($LASTIVL_IDX, 'lastivl');
+    Verify_Field($IVL_IDX, 'ivl');
     Verify_Field($TIME_IDX, 'time');
 #    die "field 10 is not lapses ($f[10])" unless  $f[10] eq 'lapses';
 
@@ -53,6 +60,7 @@ while (<>) {
     my @f = split('\t');
     my $audio = $f[$AUDIO_IDX];
     my $lastivl = $f[$LASTIVL_IDX];
+    my $ivl = $f[$IVL_IDX];
     my $type = $f[$TYPE_IDX];
     my $model = $f[$MODEL_IDX];
     my $time = $f[$TIME_IDX];
@@ -63,7 +71,7 @@ while (<>) {
     my $output =
             ($type eq "2") ||
             ($type eq "0") ||
-            ($lastivl < $MAX_DAYS) ||
+            ($ivl < $MAX_DAYS) ||
             ($time/1000.0 > 30)
             ;
 
@@ -88,11 +96,13 @@ while (<>) {
 fisher_yates_shuffle( \@keep ) if scalar (@keep) > 0;
 
 foreach my $f (@keep) {
-    if (-f $ANKIDIR.  "/collection.media/" . $f) {
-        print "file '$DIVIDER'\n";
-        print "file '$f'\n";
-    } else {
-        print STDERR "File does not exist\n";
+    for $i (1..$REPS) {
+        if (-f $ANKIDIR.  "/collection.media/" . $f) {
+            print "file '$DIVIDER'\n";
+            print "file '$f'\n";
+        } else {
+            print STDERR "File does not exist\n";
+        }
     }
 }
 
@@ -107,10 +117,10 @@ foreach my $k (sort keys %modelCount) {
 
 exit 0;
 
-print "Median reps ", median(@reps), "\n";
+#print "Median reps ", median(@reps), "\n";
 
 #print join(":", @reps), "\n";
-print "Median lapses ", median(@lapses), "\n";
+#print "Median lapses ", median(@lapses), "\n";
 #print join(":", @lapses), "\n";
 
 # from perlCookbook
