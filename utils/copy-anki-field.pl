@@ -83,13 +83,14 @@ pod2usage(2) if (not (defined $collection ));
 
 Open_Anki($collection) or die "Unable to open collection [$collection]";
 
+# always create the models first, To make sure that we are up-to-date
+Create_Model_Tables( (not $dryRun) and ($createTables > 0 ));
+
 my @models = ();
 
 if ($model) {
     @models = ($model);
 }
-
-Create_Model_Tables( (not $dryRun) and ($createTables > 0 ));
 
 if ($printModels or $printFields) {
 
@@ -112,8 +113,6 @@ if (not -f $collection) {
     pod2usage(2);
 }
 
-
-
 print STDERR "Copying field [$src] to [$dst] in [$model]\n";
 
 my $modelId = Anki_Model_Id($model) || pod2usage("Model [$model] does not exist");
@@ -129,7 +128,7 @@ if ($src ne "__ROW_NUMBER__") {
    if (not defined $srcId) {
        pod2usage("Field [$src] in Model [$model] does not exist");
    }
-   print STDERR "Copying field [$src] to [$dst] in [$model] [$modelId][$srcId][$dstId]\n";
+   print STDERR "Copying field [$src] to [$dst] in [$model] mid [$modelId] from [$srcId] to [$dstId]\n";
 
    Do_SQL("update notes set flds = fld_replace(flds, ?, fld_get(flds, ?)) where mid = ?",
           $dstId, $srcId, $modelId);

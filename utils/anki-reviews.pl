@@ -26,28 +26,43 @@ use Pod::Usage qw(pod2usage);
 require "./anki.pm";
 
 
-my $QUERY_NEXT_CARDS_AUDIO = <<END;
-with toreviewraw as (
-                   select id as cid, nid,
-                      due as dueanki,
-                     crt + due * (60 * 60 *24)  as duetimestamp,
-                   *  from cards, (select crt from col)  where type = 2 and queue >= 0
-                    ),
+my $QUERY_REVIEW_CARDS_AUDIO_HEAD = <<END;
+with
      toreview as (
-        select datetime(duetimestamp, 'unixepoch', 'localtime') as duedatestr, *
-         from toreviewraw
+        select datetime(id/1000.0, 'unixepoch', 'localtime')  as revdatestr,
+        id/1000 as revdate, -- convert from miliseconds to seconds
+        id,
+        cid, ease, ivl, lastivl, factor, time, type
+         from revlog
      )
-  select modelname, duedatestr, duetimestamp, fld_get(notes.flds,findex) as audio, type, queue, due, ivl, factor, reps, lapses
+  select modelname, revdatestr, fld_get(notes.flds,findex) as audio, ease, r.ivl, lastivl, r.factor, time, r.type
     from toreview r
-      left join notes on (notes.id = r.nid)
+      left join cards on (cards.id = cid)
+      left join notes on (notes.id = cards.nid)
       left join modelinfo using (mid)
       left join modelfields using (mid)
   where fname = ?
-order by duetimestamp, modelname, audio
-limit ?
-;
-
 END
+
+my $COMMON_ORDER_BY = "order by r.id desc, modelname, audio";
+
+
+my $QUERY_REVIEW_CARDS_by_N = <<END;
+$QUERY_REVIEW_CARDS_AUDIO_HEAD
+$COMMON_ORDER_BY
+        limit ?
+        ;
+END
+
+my $QUERY_REVIEW_CARDS_by_DATE = <<END;
+$QUERY_REVIEW_CARDS_AUDIO_HEAD
+    and r.revdatestr > ?
+$COMMON_ORDER_BY
+;
+END
+
+
+
 
 
 
@@ -59,24 +74,26 @@ my $debug = 0;
 
 my $printAudio = 1;
 
-my $numberCards = -1;
+my $numberCards = 20;
 
 my $fieldName = 'Audio';
 my $help;
-
+my $date;
 my $verbose;
+
+
 
 GetOptions ("print-models" => \$printModels,
             "print-fields"   => \$printFields,
             "create-tables" => \$createTables,
             "field=s" => \$fieldName,
             "cards=i" => \$numberCards,
+            "date=s" => \$date,
             "help|?" => \$help,
             "verbose"  => \$verbose)   # flag
         or pod2usage(1);
 
 pod2usage(-verbose=>3) if $help;
-
 
 my $collection = shift;
 
@@ -94,7 +111,6 @@ if (not -f $collection) {
 Open_Anki($collection) or die "Unable to open collection [$collection]";
 
 Create_Model_Tables($createTables);
-Create_Deck_Tables($createTables);
 
 if ($printModels) {
     Print_Models(@models);
@@ -106,25 +122,35 @@ if ($printFields) {
 
 exit 0 if ($printFields or $printModels );
 
-if ($printAudio) {
-    Print_Audio($numberCards, $fieldName, @models);
-}
+Print_Reviews($numberCards, $date, $fieldName, @models);
+
 
 
 exit 0; # this is the end...
 
 #------------------------------
 
-sub Print_Audio {
-    my ($days, $field, @models) = @_;
+sub Print_Reviews {
+    my ($numberCards, $date, $field, @models) = @_;
 
-    my $query = Extend_Where_Model($QUERY_NEXT_CARDS_AUDIO, "order by ",
-                                   'and',
-                                   @models);
+    my $query;
+    my @parms;
+
+    if (defined ($date)) {
+        $query = $QUERY_REVIEW_CARDS_by_DATE;
+        @parms = ($date);
+    } else {
+        $query = $QUERY_REVIEW_CARDS_by_N;
+        @parms = ($numberCards);
+    }
+
+    $query = Extend_Where_Model($query, "order by ",
+                                'and',
+                                 @models);
 
     print "$query\n" if $debug;
 
-    Do_Complex_Query_With_Header($query, $fieldName, $days);
+    Do_Complex_Query_With_Header($query, $fieldName, @parms);
 
 }
 
@@ -138,7 +164,7 @@ sub Print_Audio {
 #----------------  Documentation / Usage / Help ------------------
 =head1 NAME
 
-        anki_list_audio - listing audio fields from an Anki collection.
+        anki_reviews - listing log of reviews done in anki
 
 =head1 SYNOPSIS
 
@@ -163,22 +189,7 @@ Note that only cards that contain the specific field are printed.
 
 =head1 EXAMPLES
 
-  1) print the next 100 cards in the models 'jalupBeginner' and 'n5tango'
-
-    anki_list_audio --cards=100 collection.anki2 jalupBeginner n5tango'
-
-  2) print all the cards to be reviewed that have field name "Audio on Front"
-
-    anki_list_audio --field='Audio on Front' collection.anki2
-
-  3) print all models and their fields
-
-    anki_list_audio --print-fields collection.anki2
-
-  4) print all models and their fields of the n5tango model:
-
-    anki_list_audio --print-fields collection.anki2 n5tango
-
+  1)
 
 See options below for more features.
 
@@ -190,6 +201,10 @@ See options below for more features.
 
 Print a brief help message and exits.
 
+=item B<--field=name>
+
+By default print the "Audio" field of a card. This option allows to override that behaviour.
+
 =item B<--print-models>
 
 Prints the names of all models in the collection. Note that cards of different models can be in the same deck.
@@ -198,10 +213,6 @@ Therefore, a model can span multiple decks. The model defines the fields a card 
 =item B<--print-fields>
 
 Prints the field names for the models in the collection
-
-=item B<--field=name>
-
-BY default output only cards that a field called Audio. This change the name of the field to look for.
 
 =item B<--create-tables>
 
@@ -212,6 +223,13 @@ If you want them to be permanent, enable this option.
 
 By default, it print all the cards due in the future.
 If you specify a number, it will print the n cards (order by their due date--sooner first).
+
+=item B<--date=string>
+
+Print reviews since date given (format yyyy-mm-dd hh:mm:ss) during the last n days.
+It is possible to specify part of the date (e.g. since feb of 2019: "2019-02")
+
+Overrides --cards option.
 
 =item B<--verbose>
 
