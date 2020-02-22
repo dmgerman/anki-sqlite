@@ -255,6 +255,16 @@ sub Create_Deck_Tables {
     }
 }
 
+sub Create_Tables {
+    my ($commit) = @_;
+
+    Create_Model_Tables($commit);
+    Create_Deck_Tables($commit);
+}
+
+
+
+
 sub Print_Decks {
     my (@models) = @_;
 

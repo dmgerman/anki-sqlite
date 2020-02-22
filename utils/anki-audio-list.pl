@@ -93,8 +93,7 @@ if (not -f $collection) {
 
 Open_Anki($collection) or die "Unable to open collection [$collection]";
 
-Create_Model_Tables($createTables);
-Create_Deck_Tables($createTables);
+Create_Tables($createTables);
 
 if ($printModels) {
     Print_Models(@models);
