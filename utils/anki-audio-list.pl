@@ -23,7 +23,11 @@ use Encode qw( decode_utf8 encode);
 use Getopt::Long qw(GetOptions);
 use Pod::Usage qw(pod2usage);
 
-require "./anki.pm";
+use File::Basename qw(dirname);
+use Cwd  qw(abs_path);
+use lib dirname abs_path $0;
+
+use anki;
 
 
 my $QUERY_NEXT_CARDS_AUDIO = <<END;
