@@ -15,8 +15,6 @@ anki.so : anki.c
 extension-functions.so : extension-functions.c
 	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W extension-functions.c ${LIBS} ${LDFLAGS} -Wl,-z,defs -lm
 
-
-
 pcre.so : pcre.c
 	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror pcre.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
 
@@ -28,3 +26,5 @@ install : pcre.so
 
 clean :
 	-rm -f pcre.so
+
+#cc -shared -o anki.so -I/opt/local/include -fPIC -W  anki.c -lpcre

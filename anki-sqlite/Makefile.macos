@@ -1,0 +1,26 @@
+DEFAULT=anki.dylib
+CC=cc
+INSTALL=install
+CFLAGS?=
+CFLAGS+=$(shell pkg-config --cflags sqlite3 libpcre) -fPIC -I /usr/local/Cellar/sqlite/3.30.1/include
+LIBS=$(shell pkg-config --libs libpcre) -L/usr/local/Cellar/sqlite/3.30.1/lib
+prefix=/usr
+DESTDIR=/
+
+.PHONY : install clean
+
+anki.o:	anki.c
+	gcc -g -c anki.c -o anki.o
+
+anki.dylib : anki.o
+	gcc -g -fPIC  -dynamiclib -install_name ankil.dylib anki.o -o anki.dylib
+#	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror anki.c ${LIBS} ${LDFLAGS}
+#	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror anki.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
+
+anki.dlyb : anki.c
+	gcc -g -fPIC -dynamiclib anki.c -o anki.dylib
+#	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror anki.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
+
+
+clean :
+	-rm -f pcre.so

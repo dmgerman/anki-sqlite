@@ -15,7 +15,9 @@
 #include <sqlite3ext.h>
 #include <errno.h>
 
+#ifndef SQLITE_DETERMINISTIC
 #define SQLITE_DETERMINISTIC    0x800
+#endif
 
 //#define SEPARATOR '|'
 #define SEPARATOR '\x1f'
@@ -64,11 +66,12 @@ int find_location(sqlite3_context *ctx, const char *st, int index, const char **
 
 }
 
-int convert_index (sqlite3_context *ctx, const char *indexSt) {
+int convert_index (sqlite3_context *ctx, const unsigned char *indexSt) {
 
     int index;
+    char *t = (char *) indexSt;
 
-    if (sscanf(indexSt,"%d", &index) != 1) {
+    if (sscanf(t,"%d", &index) != 1) {
 	sqlite3_result_error(ctx, "no valid index provided", -1);
 	return -1;
     }
@@ -187,5 +190,6 @@ int sqlite3_extension_init(sqlite3 *db, char **err, const sqlite3_api_routines *
 
         SQLITE_EXTENSION_INIT2(api)
             sqlite3_create_function(db, "anki_setfld", 3, SQLITE_UTF8 | SQLITE_DETERMINISTIC, NULL, anki_set_field, NULL, NULL);
+        if (err) return 0;
 	return 0;
 }
