@@ -2,8 +2,8 @@ DEFAULT=json1.so anki.so
 CC=cc
 INSTALL=install
 CFLAGS?=
-CFLAGS+=$(shell pkg-config --cflags sqlite3 libpcre) -fPIC
-LIBS=$(shell pkg-config --libs libpcre)
+CFLAGS+=$(shell pkg-config --cflags sqlite3 libpcre icu-uc icu-io) -fPIC
+LIBS=$(shell pkg-config --libs libpcre icu-uc icu-io)
 prefix=/usr
 DESTDIR=/
 
@@ -14,6 +14,9 @@ anki.so : anki.c
 
 extension-functions.so : extension-functions.c
 	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W extension-functions.c ${LIBS} ${LDFLAGS} -Wl,-z,defs -lm
+
+anki-utf: anki-utf.c
+	${CC} -o $@ ${CPPFLAGS} ${CFLAGS} -W anki-utf.c ${LIBS} ${LDFLAGS} -Wl,-z,defs -lm
 
 pcre.so : pcre.c
 	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror pcre.c ${LIBS} ${LDFLAGS} -Wl,-z,defs

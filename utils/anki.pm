@@ -74,7 +74,7 @@ select modelname, count(distinct notes.id) as notes, count(*) cards, sum(queue>0
 END
 
 my $QUERY_MODELS_FIELDS = <<END;
-select modelname, fname, findex
+select modelname, fname, findex +1
    from modelinfo left join modelfields using (mid)
 order by modelname, cast(findex as int);
 END
@@ -158,6 +158,10 @@ sub Open_Anki {
     $dbh->sqlite_create_function( 'fld_count', 1, \&Count_Fields );
     $dbh->sqlite_create_function( 'fld_get', 2, \&Get_Field );
     $dbh->sqlite_create_function( 'fld_replace', 3, \&Replace_Field );
+
+    $dbh->sqlite_create_function( 'anki_getfld', 2, \&Get_Field );
+#    $dbh->sqlite_create_function( 'anki_setfld', 3, \&Replace_Field );
+
 
     return $dbh;
 }
