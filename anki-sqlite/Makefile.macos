@@ -1,25 +1,33 @@
 DEFAULT=anki.dylib
-
+# assumeing that sqlite is installed using homebrew
+# this creates a problem:
+#     pkg-config does not work well for sqlite
+# 
+# find the include dir for homebrew
+SQLITEINC=$(shell dirname `find /opt -name 'sqlite3.h' 2> /dev/null | tail -1`)
+# get the directory where it is installed
+SQLITE=$(shell dirname "${SQLITEINC}")
 CC=cc
 INSTALL=install
 CFLAGS?=
-CFLAGS+=$(shell pkg-config --cflags sqlite3 libpcre) -fPIC -I /usr/local/Cellar/sqlite/3.30.1/include
-LIBS=$(shell pkg-config --libs libpcre) -L/usr/local/Cellar/sqlite/3.30.1/lib
+CFLAGS+=$(shell pkg-config --cflags sqlite3 libpcre) -fPIC
+LIBS=$(shell pkg-config --libs libpcre sqlite3)
 prefix=/usr
 DESTDIR=/
 
 .PHONY : install clean
 
 anki.dylib : anki.o
-	gcc -g -fPIC  -dynamiclib -install_name ankil.dylib anki.o -o anki.dylib
+	gcc -g -fPIC  -dynamiclib -install_name ankil.dylib anki.o -o anki.dylib -L${SQLITE}/lib ${LIBS}
 #	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror anki.c ${LIBS} ${LDFLAGS}
 #	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror anki.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
 
 
-anki.dlyb : anki.c
-	gcc -g -fPIC -dynamiclib anki.c -o anki.dylib
+anki.o : anki.c
+	@echo "Directory where sqlite is installed and used: $(SQLITE)"
+	gcc -Wall -pedantic -I${SQLITE}/include ${CPPFLAGS} ${CFLAGS} -c -g -fPIC anki.c -o anki.o
 #	${CC} -shared -o $@ ${CPPFLAGS} ${CFLAGS} -W -Werror anki.c ${LIBS} ${LDFLAGS} -Wl,-z,defs
 
 
 clean :
-	-rm -f pcre.so
+	-rm -f anki.o anki.dylib

@@ -90,7 +90,7 @@ static
 void anki_get_field(sqlite3_context *ctx, int argc, sqlite3_value **argv)
 {
     const char *st = NULL;
-    const char *indexSt = NULL;
+    //    const char *indexSt = NULL;
 
     assert(argc == 2);
 
